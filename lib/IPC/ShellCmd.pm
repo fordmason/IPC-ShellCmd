@@ -829,7 +829,7 @@ sub _select_wait {
             }
 
             for my $fh (qw(stdout stderr)) {
-                if($self->{$fh}->[0] ne "file" && vec($rout, fileno($self->{$fh}->[2]), 1)) {
+                if($self->{$fh}->[0] ne "file" && defined(fileno($self->{$fh}->[2])) && vec($rout, fileno($self->{$fh}->[2]), 1)) {
                     my $buff = "";
                     $self->_debug(3, "Reading $IPC::ShellCmd::BufferLength from $fh");
                     my $rc = sysread($self->{$fh}->[2], $buff, $IPC::ShellCmd::BufferLength);
