@@ -746,7 +746,7 @@ sub _select_wait {
     while($rin =~ /[^\0]/ || $win =~ /[^\0]/) {
         select($rout = $rin, $wout = $win, $eout = $ein, 0.01);
 
-        if($self->{stdin}->[0] ne "file" && vec($wout, fileno($self->{stdin}->[2]), 1)) {
+        if($self->{stdin}->[0] ne "file" && defined fileno($self->{stdin}->[2]) && vec($wout, fileno($self->{stdin}->[2]), 1)) {
             if($self->{stdin}->[0] eq "plain") {
                 my $length = length($self->{stdin}->[1]);
                 if($length) {
