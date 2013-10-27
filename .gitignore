@@ -2,6 +2,8 @@ IPC-ShellCmd-*
 inc/
 Makefile
 META.yml
+MYMETA.json
+MYMETA.yml
 Makefile.old
 MANIFEST
 MANIFEST.bak

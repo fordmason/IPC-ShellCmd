@@ -5,9 +5,10 @@ use Carp qw(carp croak);
 use Scalar::Util;
 use IO::Pipe;
 use POSIX qw(:sys_wait_h);
+use Time::HiRes qw(time);
 use 5.008004; # May work with lower, unwilling to support unless you provide patches :)
 
-our $VERSION = '0.001';
+our $VERSION = '0.002';
 $VERSION = eval $VERSION;
 
 $IPC::ShellCmd::BufferLength = 16384;
@@ -22,6 +23,9 @@ IPC::ShellCmd - Run a command with a given environment and capture output
 	    ->working_dir("/path/to/IPC_ShellCmd-0.01")
 	    ->stdin(-filename => "/dev/null")
 	    ->add_envs(PERL5LIB => "/home/mbm/cpanlib/lib/perl5")
+            ->add_timers(300 => 'TERM',
+                         360 => 'KILL',
+                         5   => \&display_progress),
 	    ->chain_prog(
 	        IPC::ShellCmd::Sudo->new(
 		        User => 'cpanbuild',
@@ -221,6 +225,36 @@ sub add_envs {
 	    $self->_debug(2, "Adding environment '$e' => '$env{$e}'");
     }
 
+    return $self;
+}
+
+=head2 I<$isc>->B<add_timers>(I<$time1> => I<$signame> [, I<$time2> => \I<&handler>, ...])
+
+Adds timers to be setup when the command is run.
+Returns I<> so that it can be chained.
+
+=cut
+
+sub add_timers {
+    my ($self, @timers) = @_;
+
+    croak "Can't change setup after command has been run"
+	    if(($self->{run} || 0) > 0);
+
+    croak "No timers specified"
+	    unless @timers;
+
+    $self->{timers} ||= [];
+    
+    while (my($time, $action) = splice(@timers, 0, 2)) {
+	    $time += time
+		if $self->{running};
+	    $self->_debug(2, "Adding timer at '$time' => '$action'");
+	    push @{$self->{timers}}, [ $time, $action ];
+    }
+
+    $self->{timers} = [ sort { $a->[0] <=> $b->[0] } @{$self->{timers}} ]
+	    if $self->{running};
     return $self;
 }
 
@@ -617,6 +651,12 @@ sub run {
     }
 }
 
+    # adjust the timer time values to be epoch values
+    my $now = time;
+    $self->{timers} = [ sort { $a->[0] <=> $b->[0] } map { $_->[0] += $now; $_ } @{$self->{timers} || []} ];
+
+    $self->{running} = 1;
+
     my $pid = fork();
 
     if(!defined $pid) {
@@ -717,6 +757,7 @@ sub run {
         $self->_select_wait($pid);
     }
 
+    $self->{running} = 0;
     $self->{run} = 1;
 
     return $self;
@@ -746,7 +787,7 @@ sub _select_wait {
     while($rin =~ /[^\0]/ || $win =~ /[^\0]/) {
         select($rout = $rin, $wout = $win, $eout = $ein, 0.01);
 
-        if($self->{stdin}->[0] ne "file" && vec($wout, fileno($self->{stdin}->[2]), 1)) {
+        if($self->{stdin}->[0] ne "file" && defined fileno($self->{stdin}->[2]) && vec($wout, fileno($self->{stdin}->[2]), 1)) {
             if($self->{stdin}->[0] eq "plain") {
                 my $length = length($self->{stdin}->[1]);
                 if($length) {
@@ -829,7 +870,7 @@ sub _select_wait {
             }
 
             for my $fh (qw(stdout stderr)) {
-                if($self->{$fh}->[0] ne "file" && vec($rout, fileno($self->{$fh}->[2]), 1)) {
+                if($self->{$fh}->[0] ne "file" && defined(fileno($self->{$fh}->[2])) && vec($rout, fileno($self->{$fh}->[2]), 1)) {
                     my $buff = "";
                     $self->_debug(3, "Reading $IPC::ShellCmd::BufferLength from $fh");
                     my $rc = sysread($self->{$fh}->[2], $buff, $IPC::ShellCmd::BufferLength);
@@ -857,6 +898,23 @@ sub _select_wait {
                 $win = "";
                 $self->{status} = $?;
             }
+
+	    if (@{$self->{timers}}) {
+		my $now = time;
+		while (@{$self->{timers}} && $self->{timers}->[0][0] <= $now) {
+		    $DB::single=1;
+		    my ($time, $action) = @{shift @{$self->{timers}}};
+		    if (ref $action eq 'CODE') {
+			$self->_debug(3, "Calling timer handler at $now");
+			$action->($self, $pid, $time);
+		    }
+		    else {
+			$self->_debug(3, "Sending signal $action to child $pid at $now");
+			kill $action, $pid
+			    or $self->_debug(3, "Sending signal failed");
+		    }
+		}
+	    }
         }
 
         if($rin !~ /[^\0]/ && $win !~ /[^\0]/ && !defined $self->{status}) {
@@ -1019,9 +1077,12 @@ L<IPC::ShellCmd::Generic>, L<IPC::ShellCmd::Sudo>, L<IPC::ShellCmd::SSH>, L<IO::
 
     Tomas Doran (t0m) <bobtfish@bobtfish.net>
 
+    Andrew Ford <andrew@ford-mason.co.uk>
+
 =head1 COPYRIGHT
 
 Copyright (c) 2009 the British Broadcasting Corporation.
+
 
 =head1 LICENSE
 
