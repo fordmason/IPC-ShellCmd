@@ -25,6 +25,6 @@ author_requires 'Test::Spelling' => '0.11';
 
 author_tests 't/author';
 
-resources repository => 'http://goatse.co.uk/~bobtfish/IPC-ShellCmd/.git';
+resources repository => 'https://github.com/fordmason/IPC-ShellCmd.git';
 
 WriteAll;
