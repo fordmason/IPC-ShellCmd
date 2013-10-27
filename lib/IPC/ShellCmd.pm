@@ -746,7 +746,7 @@ sub _select_wait {
     while($rin =~ /[^\0]/ || $win =~ /[^\0]/) {
         select($rout = $rin, $wout = $win, $eout = $ein, 0.01);
 
-        if($self->{stdin}->[0] ne "file" && defined fileno($self->{stdin}->[2]) && vec($wout, fileno($self->{stdin}->[2]), 1)) {
+        if($self->{stdin}->[0] ne "file" && vec($wout, fileno($self->{stdin}->[2]), 1)) {
             if($self->{stdin}->[0] eq "plain") {
                 my $length = length($self->{stdin}->[1]);
                 if($length) {
@@ -829,7 +829,7 @@ sub _select_wait {
             }
 
             for my $fh (qw(stdout stderr)) {
-                if($self->{$fh}->[0] ne "file" && defined(fileno($self->{$fh}->[2])) && vec($rout, fileno($self->{$fh}->[2]), 1)) {
+                if($self->{$fh}->[0] ne "file" && vec($rout, fileno($self->{$fh}->[2]), 1)) {
                     my $buff = "";
                     $self->_debug(3, "Reading $IPC::ShellCmd::BufferLength from $fh");
                     my $rc = sysread($self->{$fh}->[2], $buff, $IPC::ShellCmd::BufferLength);
