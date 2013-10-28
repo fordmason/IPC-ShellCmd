@@ -8,7 +8,7 @@ use POSIX qw(:sys_wait_h);
 use Time::HiRes qw(time);
 use 5.008004; # May work with lower, unwilling to support unless you provide patches :)
 
-our $VERSION = '0.002';
+our $VERSION = '0.003';
 $VERSION = eval $VERSION;
 
 $IPC::ShellCmd::BufferLength = 16384;
